@@ -12,10 +12,11 @@ import (
 
 type Connection struct {
 	conn net.Conn
+	isAuthed bool
 }
 
 func Run(connChan chan net.Conn) {
-	c := Connection{}
+	c := Connection{isAuthed: false}
 	c.Create(connChan)
 }
 
@@ -30,13 +31,18 @@ func (this *Connection) Create(connChan chan net.Conn) {
 		select {
 		case _ = <-authRequestChannel:
 			fmt.Println("auth incoming")
-			//			success,_ := xml.Marshal(saslSuccess{})
-			//			answer(conn, success)
-			//			answer(conn, []byte("</stream:stream>"))
+			this.isAuthed = true
+			success,_ := xml.Marshal(objects.SaslSuccess{})
+			answer(this.conn, success)
+			answer(this.conn, []byte("</stream:stream>"))
 		case _ = <-streamStartChannel:
 			fmt.Println("Incoming Stream")
 			answer(this.conn, getStreamBegin())
-			sendAuthRequest(this.conn)
+			if(!this.isAuthed) {
+				sendAuthRequest(this.conn)
+			}else{
+				fmt.Println("authed")
+			}
 		}
 	}
 }
