@@ -25,11 +25,11 @@ func (this *Connection) Create(connChan chan net.Conn) {
 
 	authRequestChannel := make(chan bool)
 	streamStartChannel := make(chan bool)
-	answerChannel := make(chan []byte)
+	iqChannel 		   := make(chan xml.Token)
+	answerChannel      := make(chan []byte)
 
-	go this.handleAnswerConnection(answerChannel);
-
-	go this.handleIncoming(authRequestChannel, streamStartChannel);
+	go this.handleAnswerConnection(answerChannel); //outgoing stream
+	go this.handleIncoming(authRequestChannel, streamStartChannel, iqChannel); //incoming stream
 
 	for {
 		select {
@@ -48,6 +48,8 @@ func (this *Connection) Create(connChan chan net.Conn) {
 			}else{
 				answerChannel <- getStreamFeatures()
 			}
+		case iq := <-iqChannel:
+			fmt.Println(iq)
 		}
 	}
 }
@@ -58,22 +60,24 @@ func (this *Connection) handleAnswerConnection(answerChan chan []byte) {
 	}
 }
 
-func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStreamChannel chan bool) {
+func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStreamChannel chan bool, iqChannel chan xml.Token) {
 	connection := util.Tee{this.conn, os.Stdout}
 	decoder := xml.NewDecoder(connection);
 	decoder.Strict = false;
 
 	for {
-		token, _ := decoder.RawToken()
+		token, _ := decoder.Token()
 		switch tokenType := token.(type) {
 		case xml.StartElement:
 			elmt := xml.StartElement(tokenType)
 			name := elmt.Name.Local
 			switch name {
 			case "stream":
-			incomingStreamChannel<-true
+				incomingStreamChannel<-true
 			case "auth":
-			authRequestChannel<-true
+				authRequestChannel<-true
+			case "iq":
+				iqChannel<-decoder
 			}
 		case xml.ProcInst:
 			fmt.Println("xml header")

@@ -58,5 +58,13 @@ type FeatureBind struct {
 	Required Required
 }
 
+type Iq struct {
+	XMLName xml.Name `xml:"iq"`
+	Id string `xml:"id,attr"`
+	From string `xml:"from,attr"`
+	To string `xml:"to,attr"`
+	Type string `xml:"type,attr"`
+}
+
 type Required struct {}
 type Optional struct {}
