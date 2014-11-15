@@ -25,6 +25,10 @@ func (this *Connection) Create(connChan chan net.Conn) {
 
 	authRequestChannel := make(chan bool)
 	streamStartChannel := make(chan bool)
+	answerChannel := make(chan []byte)
+
+	go this.handleAnswerConnection(answerChannel);
+
 	go handleConnection(authRequestChannel, streamStartChannel, this.conn);
 
 	for {
@@ -32,18 +36,25 @@ func (this *Connection) Create(connChan chan net.Conn) {
 		case _ = <-authRequestChannel:
 			fmt.Println("auth incoming")
 			this.isAuthed = true
+			//TODO check credentials
 			success,_ := xml.Marshal(objects.SaslSuccess{})
-			answer(this.conn, success)
-			answer(this.conn, []byte("</stream:stream>"))
+			answerChannel <- success
+			answerChannel <- []byte("</stream:stream>")
 		case _ = <-streamStartChannel:
 			fmt.Println("Incoming Stream")
-			answer(this.conn, getStreamBegin())
+			answerChannel <- getStreamBegin()
 			if(!this.isAuthed) {
-				sendAuthRequest(this.conn)
+				answerChannel <- getAuthRequest()
 			}else{
 				fmt.Println("authed")
 			}
 		}
+	}
+}
+
+func (this *Connection) handleAnswerConnection(answerChan chan []byte) {
+	for answer := range answerChan {
+		fmt.Fprint(this.conn, string(answer))
 	}
 }
 
@@ -71,14 +82,14 @@ func handleConnection(authRequestChannel chan bool, incomingStreamChannel chan b
 
 }
 
-func sendAuthRequest(conn net.Conn) {
+func getAuthRequest() []byte {
 	var plainMechanism objects.SaslMechanisms = objects.SaslMechanisms{}
 	plainMechanism.Mechanism[0] = "PLAIN"
 	features := objects.SaslFeatures{}
 	features.Mechanisms = plainMechanism
 	featuresBytes, _ := xml.Marshal(features)
 
-	answer(conn, featuresBytes)
+	return featuresBytes
 }
 
 func getStreamBegin() []byte {
@@ -91,9 +102,4 @@ func getStreamBegin() []byte {
 
 	streamArray := bytes.Split(streamBytes, []byte("</"))
 	return streamArray[0]
-}
-
-
-func answer(conn net.Conn, data []byte) {
-	fmt.Fprint(conn, string(data))
 }
