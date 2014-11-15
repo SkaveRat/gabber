@@ -29,7 +29,7 @@ func (this *Connection) Create(connChan chan net.Conn) {
 
 	go this.handleAnswerConnection(answerChannel);
 
-	go handleConnection(authRequestChannel, streamStartChannel, this.conn);
+	go this.handleConnection(authRequestChannel, streamStartChannel, this.conn);
 
 	for {
 		select {
@@ -58,7 +58,7 @@ func (this *Connection) handleAnswerConnection(answerChan chan []byte) {
 	}
 }
 
-func handleConnection(authRequestChannel chan bool, incomingStreamChannel chan bool, conn net.Conn) {
+func (this *Connection) handleConnection(authRequestChannel chan bool, incomingStreamChannel chan bool, conn net.Conn) {
 	connection := util.Tee{conn, os.Stdout}
 	decoder := xml.NewDecoder(connection);
 	decoder.Strict = false;
