@@ -7,66 +7,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"bytes"
+	"github.com/skaverat/gabber/objects"
 )
-
-type stream struct {
-	XMLName       xml.Name `xml:"jabber:client stream:stream"`
-	XMLNameAttr   string `xml:"xmlns:stream,attr"`
-	Id            string `xml:"id,attr"`
-	From          string `xml:"from,attr"`
-	Version       string `xml:"version,attr"`
-}
-
-type incomingStream struct {
-	XMLName       xml.Name `xml:"jabber:client stream:stream"`
-	XMLNameAttr   string `xml:"xmlns:stream,attr"`
-	To            string `xml:"to,attr"`
-	Version       string `xml:"version,attr"`
-}
-
-
-type saslAuthRequest struct {
-	XMLName   xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-sasl auth"`
-	Mechanism string `xml:"mechanism,attr"`
-	Text      string `xml:",chardata"`
-}
-
-type saslSuccess struct {
-	XMLName   xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-sasl success"`
-}
-
-
-type saslMechanisms struct {
-	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-sasl mechanisms"`
-	Mechanism [1]string `xml:"mechanism"`
-}
-
-//auth features
-type saslFeatures struct {
-	XMLName    xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-sasl stream:features"`
-	Mechanisms saslMechanisms `xml:",omitempty"`
-}
-
-//session features
-type streamFeatures struct {
-	XMLName    xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-sasl stream:features"`
-	Bind       featureBind
-	Session    featureSession
-}
-
-
-type featureSession struct {
-	XMLName  xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-session session"`
-	Optional optional
-}
-
-type featureBind struct {
-	XMLName  xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-bind bind"`
-	Required required
-}
-
-type required struct {}
-type optional struct {}
 
 
 func main() {
@@ -129,9 +71,9 @@ func handleConnection(authRequestChannel chan bool, incomingStreamChannel chan b
 }
 
 func sendAuthRequest(conn net.Conn) {
-		var plainMechanism saslMechanisms = saslMechanisms{}
+		var plainMechanism objects.SaslMechanisms = objects.SaslMechanisms{}
 		plainMechanism.Mechanism[0] = "PLAIN"
-		features := saslFeatures{}
+		features := objects.SaslFeatures{}
 		features.Mechanisms = plainMechanism
 		featuresBytes, _ := xml.Marshal(features)
 
@@ -139,7 +81,7 @@ func sendAuthRequest(conn net.Conn) {
 }
 
 func getStreamBegin() []byte {
-	stream := stream{}
+	stream := objects.Stream{}
 	stream.XMLNameAttr = "http://etherx.jabber.org/streams"
 	stream.Id = "kjsandkjbfhjbdsjfbsdf"
 	stream.From = "localhost"
