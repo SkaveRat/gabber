@@ -46,7 +46,7 @@ func (this *Connection) Create(connChan chan net.Conn) {
 			if(!this.isAuthed) {
 				answerChannel <- getAuthRequest()
 			}else{
-				fmt.Println("authed")
+				answerChannel <- getStreamFeatures()
 			}
 		}
 	}
@@ -80,6 +80,13 @@ func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStr
 		}
 	}
 
+}
+
+func getStreamFeatures() []byte {
+	var features objects.StreamFeatures = objects.StreamFeatures{}
+	featuresBytes,_ := xml.Marshal(features);
+
+	return featuresBytes
 }
 
 func getAuthRequest() []byte {
