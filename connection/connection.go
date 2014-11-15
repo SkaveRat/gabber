@@ -25,7 +25,7 @@ func (this *Connection) Create(connChan chan net.Conn) {
 
 	authRequestChannel := make(chan bool)
 	streamStartChannel := make(chan bool)
-	iqChannel 		   := make(chan xml.Token)
+	iqChannel 		   := make(chan IqStanza)
 	answerChannel      := make(chan []byte)
 
 	go this.handleAnswerConnection(answerChannel); //outgoing stream
@@ -48,8 +48,9 @@ func (this *Connection) Create(connChan chan net.Conn) {
 			}else{
 				answerChannel <- getStreamFeatures()
 			}
-		case iq := <-iqChannel:
-			fmt.Println(iq)
+		case iqToken := <-iqChannel:
+			value,_ := xml.Marshal(iqToken)
+			answerChannel <- value
 		}
 	}
 }
@@ -60,7 +61,7 @@ func (this *Connection) handleAnswerConnection(answerChan chan []byte) {
 	}
 }
 
-func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStreamChannel chan bool, iqChannel chan xml.Token) {
+func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStreamChannel chan bool, iqChannel chan IqStanza) {
 	connection := util.Tee{this.conn, os.Stdout}
 	decoder := xml.NewDecoder(connection);
 	decoder.Strict = false;
@@ -69,7 +70,7 @@ func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStr
 		token, _ := decoder.Token()
 		switch tokenType := token.(type) {
 		case xml.StartElement:
-			elmt := xml.StartElement(tokenType)
+			var elmt xml.StartElement = xml.StartElement(tokenType)
 			name := elmt.Name.Local
 			switch name {
 			case "stream":
@@ -77,13 +78,75 @@ func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStr
 			case "auth":
 				authRequestChannel<-true
 			case "iq":
-				iqChannel<-decoder
+				iq := IqStanza{}
+
+				for _,attr := range elmt.Attr {
+					switch attr.Name.Local{
+					case "id":
+						iq.Id = attr.Value
+					case "type":
+						iq.Type = attr.Value
+					}
+				}
+
+				bind := Bind{}
+				decoder.Decode(&bind)
+				iq.Bind = bind
+
+				iqResponse := getBindResponse(iq.Id)
+				iqChannel <- iqResponse
 			}
 		case xml.ProcInst:
-			fmt.Println("xml header")
+			//XML header
 		}
 	}
 
+}
+
+func getBindResponse(id string) IqStanza {
+
+	bind := Bind{}
+	bind.Jid = Jid{Value:"xabber@localhost/foobar"}
+
+	iq := IqStanza{
+		Id: id,
+		Type: "result",
+		Bind: bind,
+	}
+
+	return iq
+}
+
+type IqStanza struct {
+	XMLName xml.Name `xml:"iq"`
+	Id string `xml:"id,attr"`
+	Type string  `xml:"type,attr"`
+	From string  `xml:"from,attr,omitempty"`
+	To string  `xml:"to,attr,omitempty"`
+	Bind Bind  `xml:""`
+}
+
+type Bind struct {
+	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-bind bind"`
+	Resource Resource `xml:resource,chardata,omitempty`
+	Jid Jid `xml:resource,chardata`
+}
+
+type Jid struct {
+	XMLName xml.Name `xml:"jid"`
+	Value string `xml:",chardata"`
+}
+
+type Resource struct {
+	XMLName xml.Name `xml:"resource"`
+	Value string `xml:",chardata"`
+}
+
+func getBindConfirm() []byte {
+	var features objects.StreamFeatures = objects.StreamFeatures{}
+	featuresBytes,_ := xml.Marshal(features);
+
+	return featuresBytes
 }
 
 func getStreamFeatures() []byte {
