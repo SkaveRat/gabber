@@ -66,41 +66,51 @@ func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStr
 	decoder := xml.NewDecoder(connection);
 	decoder.Strict = false;
 
-	for {
-		token, _ := decoder.Token()
-		switch tokenType := token.(type) {
-		case xml.StartElement:
-			var elmt xml.StartElement = xml.StartElement(tokenType)
-			name := elmt.Name.Local
-			switch name {
-			case "stream":
-				incomingStreamChannel<-true
-			case "auth":
-				authRequestChannel<-true
-			case "iq":
-				iq := IqStanza{}
+	var isWaitingForStream bool = true
 
-				for _,attr := range elmt.Attr {
-					switch attr.Name.Local{
-					case "id":
-						iq.Id = attr.Value
-					case "type":
-						iq.Type = attr.Value
+	for { //TODO: case condition when switching between stream- and stanza loop?
+		if(isWaitingForStream) {
+			Streamloop:
+			for {
+				token, _ := decoder.Token()
+				switch tokenType := token.(type) {
+				case xml.StartElement:
+					var elmt xml.StartElement = xml.StartElement(tokenType)
+					name := elmt.Name.Local
+					switch name {
+					case "stream":
+						incomingStreamChannel<-true
+						isWaitingForStream = false
+						break Streamloop
 					}
+				case xml.ProcInst:
+					//XML header
 				}
-
-				bind := Bind{}
-				decoder.Decode(&bind)
-				iq.Bind = bind
-
-				iqResponse := getBindResponse(iq.Id)
-				iqChannel <- iqResponse
 			}
-		case xml.ProcInst:
-			//XML header
+		}else {
+			Stanzaloop:
+			for {
+				var stanza IncomingStanza = IncomingStanza{}
+				err := decoder.Decode(&stanza)
+				if (err != nil) { fmt.Println(err) }
+
+				switch stanza.XMLName.Local {
+				case "auth":
+					isWaitingForStream = true
+					authRequestChannel <- true
+					break Stanzaloop
+				case "iq":
+					iqChannel<-getBindResponse(stanza.Id)
+				}
+			}
 		}
 	}
+}
 
+type IncomingStanza struct {
+	XMLName xml.Name `xml:""`
+	InnerXml string `xml:",innerxml"`
+	Id string `xml:"id,attr,omitmissing"`
 }
 
 func getBindResponse(id string) IqStanza {
