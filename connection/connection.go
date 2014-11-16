@@ -26,7 +26,7 @@ func (this *Connection) Create(connChan chan net.Conn) {
 	authRequestChannel := make(chan bool)
 	streamStartChannel := make(chan bool)
 	connCloseChannel := make(chan bool)
-	iqChannel 		   := make(chan []byte)
+	iqChannel 		   := make(chan IncomingStanza)
 	answerChannel      := make(chan []byte)
 
 	go this.handleAnswerConnection(answerChannel); //outgoing stream
@@ -48,8 +48,22 @@ func (this *Connection) Create(connChan chan net.Conn) {
 			}else{
 				answerChannel <- getStreamFeatures()
 			}
-		case iqData := <-iqChannel:
-			answerChannel <- iqData
+		case stanza := <-iqChannel:
+			bind       := Bind{}
+			session    := Session{}
+			infoquery  := InfoQuery{}
+			itemsquery := ItemsQuery{}
+			var response []byte
+			if nil == xml.Unmarshal(stanza.InnerXml, &bind) {
+				response = getBindResponse(stanza.Id)
+			}else if nil == xml.Unmarshal(stanza.InnerXml, &session) {
+				response = getSessionResponse(stanza.Id)
+			}else if nil == xml.Unmarshal(stanza.InnerXml, &infoquery) {
+				response = getInfoQueryResponse(stanza.Id)
+			}else if nil == xml.Unmarshal(stanza.InnerXml, &itemsquery) {
+				response = getItemsQueryResponse(stanza.Id)
+			}
+			answerChannel <- response
 		case _ = <-connCloseChannel:
 			answerChannel <- []byte("</stream:stream>")
 			break Mainloop
@@ -64,7 +78,7 @@ func (this *Connection) handleAnswerConnection(answerChan chan []byte) {
 	}
 }
 
-func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStreamChannel chan bool, iqChannel chan []byte, connCloseChannel chan bool) {
+func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStreamChannel chan bool, iqChannel chan IncomingStanza, connCloseChannel chan bool) {
 	connection := util.Tee{this.conn, os.Stdout}
 	decoder := xml.NewDecoder(connection);
 	decoder.Strict = false;
@@ -105,19 +119,7 @@ func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStr
 					authRequestChannel <- true
 					break Stanzaloop
 				case "iq":
-					bind := Bind{}
-					session := Session{}
-					infoquery := InfoQuery{}
-					itemsquery := ItemsQuery{}
-					if nil == xml.Unmarshal(stanza.InnerXml, &bind) {
-						iqChannel<-getBindResponse(stanza.Id)
-					}else if nil == xml.Unmarshal(stanza.InnerXml, &session) {
-						iqChannel<-getSessionResponse(stanza.Id)
-					}else if nil == xml.Unmarshal(stanza.InnerXml, &infoquery) {
-						iqChannel<-getInfoQueryResponse(stanza.Id)
-					}else if nil == xml.Unmarshal(stanza.InnerXml, &itemsquery) {
-						iqChannel<-getItemsQueryResponse(stanza.Id)
-					}
+					iqChannel<-stanza
 				}
 			}
 		}
