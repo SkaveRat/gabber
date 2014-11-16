@@ -25,7 +25,7 @@ func (this *Connection) Create(connChan chan net.Conn) {
 
 	authRequestChannel := make(chan bool)
 	streamStartChannel := make(chan bool)
-	iqChannel 		   := make(chan IqStanza)
+	iqChannel 		   := make(chan []byte)
 	answerChannel      := make(chan []byte)
 
 	go this.handleAnswerConnection(answerChannel); //outgoing stream
@@ -34,14 +34,12 @@ func (this *Connection) Create(connChan chan net.Conn) {
 	for {
 		select {
 		case _ = <-authRequestChannel:
-			fmt.Println("auth incoming")
 			this.isAuthed = true
 			//TODO check credentials
 			success,_ := xml.Marshal(objects.SaslSuccess{})
 			answerChannel <- success
 			answerChannel <- []byte("</stream:stream>")
 		case _ = <-streamStartChannel:
-			fmt.Println("Incoming Stream")
 			answerChannel <- getStreamBegin()
 			if(!this.isAuthed) {
 				answerChannel <- getAuthRequest()
@@ -49,8 +47,7 @@ func (this *Connection) Create(connChan chan net.Conn) {
 				answerChannel <- getStreamFeatures()
 			}
 		case iqToken := <-iqChannel:
-			value,_ := xml.Marshal(iqToken)
-			answerChannel <- value
+			answerChannel <- iqToken
 		}
 	}
 }
@@ -61,7 +58,7 @@ func (this *Connection) handleAnswerConnection(answerChan chan []byte) {
 	}
 }
 
-func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStreamChannel chan bool, iqChannel chan IqStanza) {
+func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStreamChannel chan bool, iqChannel chan []byte) {
 	connection := util.Tee{this.conn, os.Stdout}
 	decoder := xml.NewDecoder(connection);
 	decoder.Strict = false;
@@ -100,7 +97,13 @@ func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStr
 					authRequestChannel <- true
 					break Stanzaloop
 				case "iq":
-					iqChannel<-getBindResponse(stanza.Id)
+					bind := Bind{}
+					session := Session{}
+					if nil == xml.Unmarshal(stanza.InnerXml, &bind) {
+						iqChannel<-getBindResponse(stanza.Id)
+					}else if nil == xml.Unmarshal(stanza.InnerXml, &session) {
+						iqChannel<-getSessionResponse(stanza.Id)
+					}
 				}
 			}
 		}
@@ -109,31 +112,56 @@ func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStr
 
 type IncomingStanza struct {
 	XMLName xml.Name `xml:""`
-	InnerXml string `xml:",innerxml"`
+	InnerXml []byte `xml:",innerxml"`
 	Id string `xml:"id,attr,omitmissing"`
 }
 
-func getBindResponse(id string) IqStanza {
-
+func getBindResponse(id string) []byte {
 	bind := Bind{}
 	bind.Jid = Jid{Value:"xabber@localhost/foobar"}
 
-	iq := IqStanza{
+	iq := IqStanzaBind{
 		Id: id,
 		Type: "result",
 		Bind: bind,
 	}
-
-	return iq
+	iqBytes,_ := xml.Marshal(iq)
+	return iqBytes
 }
 
-type IqStanza struct {
+func getSessionResponse(id string) []byte {
+
+	iq := IqStanzaSession{
+		Id: id,
+		Type: "result",
+		Session: Session{},
+	}
+	iqBytes,_ := xml.Marshal(iq)
+	return iqBytes
+}
+
+
+type IqStanzaBind struct {
 	XMLName xml.Name `xml:"iq"`
 	Id string `xml:"id,attr"`
 	Type string  `xml:"type,attr"`
 	From string  `xml:"from,attr,omitempty"`
 	To string  `xml:"to,attr,omitempty"`
 	Bind Bind  `xml:""`
+}
+
+
+type IqStanzaSession struct {
+	XMLName xml.Name `xml:"iq"`
+	Id string `xml:"id,attr"`
+	Type string  `xml:"type,attr"`
+	From string  `xml:"from,attr,omitempty"`
+	To string  `xml:"to,attr,omitempty"`
+	Session Session  `xml:""`
+}
+
+type Session struct {
+	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-session session"`
 }
 
 type Bind struct {
