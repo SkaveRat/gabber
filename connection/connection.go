@@ -25,12 +25,14 @@ func (this *Connection) Create(connChan chan net.Conn) {
 
 	authRequestChannel := make(chan bool)
 	streamStartChannel := make(chan bool)
+	connCloseChannel := make(chan bool)
 	iqChannel 		   := make(chan []byte)
 	answerChannel      := make(chan []byte)
 
 	go this.handleAnswerConnection(answerChannel); //outgoing stream
-	go this.handleIncoming(authRequestChannel, streamStartChannel, iqChannel); //incoming stream
+	go this.handleIncoming(authRequestChannel, streamStartChannel, iqChannel, connCloseChannel); //incoming stream
 
+	Mainloop:
 	for {
 		select {
 		case _ = <-authRequestChannel:
@@ -48,8 +50,12 @@ func (this *Connection) Create(connChan chan net.Conn) {
 			}
 		case iqToken := <-iqChannel:
 			answerChannel <- iqToken
+		case _ = <-connCloseChannel:
+			answerChannel <- []byte("</stream:stream>")
+			break Mainloop
 		}
 	}
+	this.conn.Close()
 }
 
 func (this *Connection) handleAnswerConnection(answerChan chan []byte) {
@@ -58,7 +64,7 @@ func (this *Connection) handleAnswerConnection(answerChan chan []byte) {
 	}
 }
 
-func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStreamChannel chan bool, iqChannel chan []byte) {
+func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStreamChannel chan bool, iqChannel chan []byte, connCloseChannel chan bool) {
 	connection := util.Tee{this.conn, os.Stdout}
 	decoder := xml.NewDecoder(connection);
 	decoder.Strict = false;
@@ -89,7 +95,9 @@ func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStr
 			for {
 				var stanza IncomingStanza = IncomingStanza{}
 				err := decoder.Decode(&stanza)
-				if (err != nil) { fmt.Println(err) }
+				if (err != nil) {
+					connCloseChannel <- true
+				}
 
 				switch stanza.XMLName.Local {
 				case "auth":
