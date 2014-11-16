@@ -48,8 +48,8 @@ func (this *Connection) Create(connChan chan net.Conn) {
 			}else{
 				answerChannel <- getStreamFeatures()
 			}
-		case iqToken := <-iqChannel:
-			answerChannel <- iqToken
+		case iqData := <-iqChannel:
+			answerChannel <- iqData
 		case _ = <-connCloseChannel:
 			answerChannel <- []byte("</stream:stream>")
 			break Mainloop
@@ -107,10 +107,16 @@ func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStr
 				case "iq":
 					bind := Bind{}
 					session := Session{}
+					infoquery := InfoQuery{}
+					itemsquery := ItemsQuery{}
 					if nil == xml.Unmarshal(stanza.InnerXml, &bind) {
 						iqChannel<-getBindResponse(stanza.Id)
 					}else if nil == xml.Unmarshal(stanza.InnerXml, &session) {
 						iqChannel<-getSessionResponse(stanza.Id)
+					}else if nil == xml.Unmarshal(stanza.InnerXml, &infoquery) {
+						iqChannel<-getInfoQueryResponse(stanza.Id)
+					}else if nil == xml.Unmarshal(stanza.InnerXml, &itemsquery) {
+						iqChannel<-getItemsQueryResponse(stanza.Id)
 					}
 				}
 			}
@@ -122,6 +128,28 @@ type IncomingStanza struct {
 	XMLName xml.Name `xml:""`
 	InnerXml []byte `xml:",innerxml"`
 	Id string `xml:"id,attr,omitmissing"`
+}
+
+func getInfoQueryResponse(id string) []byte {
+	iq := IqStanzaInfoQuery{
+		Id: id,
+		Type: "result",
+		From: "localhost",
+		InfoQuery: InfoQuery{},
+	}
+	iqBytes,_ := xml.Marshal(iq)
+	return iqBytes
+}
+
+func getItemsQueryResponse(id string) []byte {
+	iq := IqStanzaItemsQuery{
+		Id: id,
+		Type: "result",
+		From: "localhost",
+		ItemsQuery: ItemsQuery{},
+	}
+	iqBytes,_ := xml.Marshal(iq)
+	return iqBytes
 }
 
 func getBindResponse(id string) []byte {
@@ -148,6 +176,23 @@ func getSessionResponse(id string) []byte {
 	return iqBytes
 }
 
+type IqStanzaItemsQuery struct {
+	XMLName xml.Name `xml:"iq"`
+	Id string `xml:"id,attr"`
+	Type string  `xml:"type,attr"`
+	From string  `xml:"from,attr,omitempty"`
+	To string  `xml:"to,attr,omitempty"`
+	ItemsQuery ItemsQuery `xml:""`
+}
+
+type IqStanzaInfoQuery struct {
+	XMLName xml.Name `xml:"iq"`
+	Id string `xml:"id,attr"`
+	Type string  `xml:"type,attr"`
+	From string  `xml:"from,attr,omitempty"`
+	To string  `xml:"to,attr,omitempty"`
+	InfoQuery InfoQuery `xml:""`
+}
 
 type IqStanzaBind struct {
 	XMLName xml.Name `xml:"iq"`
@@ -158,7 +203,6 @@ type IqStanzaBind struct {
 	Bind Bind  `xml:""`
 }
 
-
 type IqStanzaSession struct {
 	XMLName xml.Name `xml:"iq"`
 	Id string `xml:"id,attr"`
@@ -167,6 +211,15 @@ type IqStanzaSession struct {
 	To string  `xml:"to,attr,omitempty"`
 	Session Session  `xml:""`
 }
+
+type ItemsQuery struct {
+	XMLName xml.Name `xml:"http://jabber.org/protocol/disco#items query"`
+}
+
+type InfoQuery struct {
+	XMLName xml.Name `xml:"http://jabber.org/protocol/disco#info query"`
+}
+
 
 type Session struct {
 	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-session session"`
