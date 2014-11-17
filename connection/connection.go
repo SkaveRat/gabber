@@ -26,7 +26,7 @@ func (this *Connection) Create(connChan chan net.Conn) {
 	authRequestChannel := make(chan bool)
 	streamStartChannel := make(chan bool)
 	connCloseChannel := make(chan bool)
-	iqChannel 		   := make(chan IncomingStanza)
+	iqChannel 		   := make(chan objects.IncomingStanza)
 	answerChannel      := make(chan []byte)
 
 	go this.handleAnswerConnection(answerChannel); //outgoing stream
@@ -49,10 +49,10 @@ func (this *Connection) Create(connChan chan net.Conn) {
 				answerChannel <- getStreamFeatures()
 			}
 		case stanza := <-iqChannel:
-			bind       := Bind{}
-			session    := Session{}
-			infoquery  := InfoQuery{}
-			itemsquery := ItemsQuery{}
+			bind       := objects.Bind{}
+			session    := objects.Session{}
+			infoquery  := objects.InfoQuery{}
+			itemsquery := objects.ItemsQuery{}
 			var response []byte
 			if nil == xml.Unmarshal(stanza.InnerXml, &bind) {
 				response = getBindResponse(stanza.Id)
@@ -78,7 +78,7 @@ func (this *Connection) handleAnswerConnection(answerChan chan []byte) {
 	}
 }
 
-func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStreamChannel chan bool, iqChannel chan IncomingStanza, connCloseChannel chan bool) {
+func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStreamChannel chan bool, iqChannel chan objects.IncomingStanza, connCloseChannel chan bool) {
 	connection := util.Tee{this.conn, os.Stdout}
 	decoder := xml.NewDecoder(connection);
 	decoder.Strict = false;
@@ -107,7 +107,7 @@ func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStr
 		}else {
 			Stanzaloop:
 			for {
-				var stanza IncomingStanza = IncomingStanza{}
+				var stanza objects.IncomingStanza = objects.IncomingStanza{}
 				err := decoder.Decode(&stanza)
 				if (err != nil) {
 					connCloseChannel <- true
@@ -126,39 +126,33 @@ func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStr
 	}
 }
 
-type IncomingStanza struct {
-	XMLName xml.Name `xml:""`
-	InnerXml []byte `xml:",innerxml"`
-	Id string `xml:"id,attr,omitmissing"`
-}
-
 func getInfoQueryResponse(id string) []byte {
-	iq := IqStanzaInfoQuery{
+	iq := objects.IqStanzaInfoQuery{
 		Id: id,
 		Type: "result",
 		From: "localhost",
-		InfoQuery: InfoQuery{},
+		InfoQuery: objects.InfoQuery{},
 	}
 	iqBytes,_ := xml.Marshal(iq)
 	return iqBytes
 }
 
 func getItemsQueryResponse(id string) []byte {
-	iq := IqStanzaItemsQuery{
+	iq := objects.IqStanzaItemsQuery{
 		Id: id,
 		Type: "result",
 		From: "localhost",
-		ItemsQuery: ItemsQuery{},
+		ItemsQuery: objects.ItemsQuery{},
 	}
 	iqBytes,_ := xml.Marshal(iq)
 	return iqBytes
 }
 
 func getBindResponse(id string) []byte {
-	bind := Bind{}
-	bind.Jid = Jid{Value:"xabber@localhost/foobar"}
+	bind := objects.Bind{}
+	bind.Jid = objects.Jid{Value:"xabber@localhost/foobar"}
 
-	iq := IqStanzaBind{
+	iq := objects.IqStanzaBind{
 		Id: id,
 		Type: "result",
 		Bind: bind,
@@ -169,78 +163,13 @@ func getBindResponse(id string) []byte {
 
 func getSessionResponse(id string) []byte {
 
-	iq := IqStanzaSession{
+	iq := objects.IqStanzaSession{
 		Id: id,
 		Type: "result",
-		Session: Session{},
+		Session: objects.Session{},
 	}
 	iqBytes,_ := xml.Marshal(iq)
 	return iqBytes
-}
-
-type IqStanzaItemsQuery struct {
-	XMLName xml.Name `xml:"iq"`
-	Id string `xml:"id,attr"`
-	Type string  `xml:"type,attr"`
-	From string  `xml:"from,attr,omitempty"`
-	To string  `xml:"to,attr,omitempty"`
-	ItemsQuery ItemsQuery `xml:""`
-}
-
-type IqStanzaInfoQuery struct {
-	XMLName xml.Name `xml:"iq"`
-	Id string `xml:"id,attr"`
-	Type string  `xml:"type,attr"`
-	From string  `xml:"from,attr,omitempty"`
-	To string  `xml:"to,attr,omitempty"`
-	InfoQuery InfoQuery `xml:""`
-}
-
-type IqStanzaBind struct {
-	XMLName xml.Name `xml:"iq"`
-	Id string `xml:"id,attr"`
-	Type string  `xml:"type,attr"`
-	From string  `xml:"from,attr,omitempty"`
-	To string  `xml:"to,attr,omitempty"`
-	Bind Bind  `xml:""`
-}
-
-type IqStanzaSession struct {
-	XMLName xml.Name `xml:"iq"`
-	Id string `xml:"id,attr"`
-	Type string  `xml:"type,attr"`
-	From string  `xml:"from,attr,omitempty"`
-	To string  `xml:"to,attr,omitempty"`
-	Session Session  `xml:""`
-}
-
-type ItemsQuery struct {
-	XMLName xml.Name `xml:"http://jabber.org/protocol/disco#items query"`
-}
-
-type InfoQuery struct {
-	XMLName xml.Name `xml:"http://jabber.org/protocol/disco#info query"`
-}
-
-
-type Session struct {
-	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-session session"`
-}
-
-type Bind struct {
-	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-bind bind"`
-	Resource Resource `xml:resource,chardata,omitempty`
-	Jid Jid `xml:resource,chardata`
-}
-
-type Jid struct {
-	XMLName xml.Name `xml:"jid"`
-	Value string `xml:",chardata"`
-}
-
-type Resource struct {
-	XMLName xml.Name `xml:"resource"`
-	Value string `xml:",chardata"`
 }
 
 func getBindConfirm() []byte {

@@ -68,3 +68,76 @@ type Iq struct {
 
 type Required struct {}
 type Optional struct {}
+
+
+type IncomingStanza struct {
+	XMLName xml.Name `xml:""`
+	InnerXml []byte `xml:",innerxml"`
+	Id string `xml:"id,attr,omitmissing"`
+}
+
+
+type IqStanzaItemsQuery struct {
+	XMLName xml.Name `xml:"iq"`
+	Id string `xml:"id,attr"`
+	Type string  `xml:"type,attr"`
+	From string  `xml:"from,attr,omitempty"`
+	To string  `xml:"to,attr,omitempty"`
+	ItemsQuery ItemsQuery `xml:""`
+}
+
+type IqStanzaInfoQuery struct {
+	XMLName xml.Name `xml:"iq"`
+	Id string `xml:"id,attr"`
+	Type string  `xml:"type,attr"`
+	From string  `xml:"from,attr,omitempty"`
+	To string  `xml:"to,attr,omitempty"`
+	InfoQuery InfoQuery `xml:""`
+}
+
+type IqStanzaBind struct {
+	XMLName xml.Name `xml:"iq"`
+	Id string `xml:"id,attr"`
+	Type string  `xml:"type,attr"`
+	From string  `xml:"from,attr,omitempty"`
+	To string  `xml:"to,attr,omitempty"`
+	Bind Bind  `xml:""`
+}
+
+type IqStanzaSession struct {
+	XMLName xml.Name `xml:"iq"`
+	Id string `xml:"id,attr"`
+	Type string  `xml:"type,attr"`
+	From string  `xml:"from,attr,omitempty"`
+	To string  `xml:"to,attr,omitempty"`
+	Session Session  `xml:""`
+}
+
+type ItemsQuery struct {
+	XMLName xml.Name `xml:"http://jabber.org/protocol/disco#items query"`
+}
+
+type InfoQuery struct {
+	XMLName xml.Name `xml:"http://jabber.org/protocol/disco#info query"`
+}
+
+
+type Session struct {
+	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-session session"`
+}
+
+type Bind struct {
+	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-bind bind"`
+	Resource Resource `xml:resource,chardata,omitempty`
+	Jid Jid `xml:resource,chardata`
+}
+
+type Jid struct {
+	XMLName xml.Name `xml:"jid"`
+	Value string `xml:",chardata"`
+}
+
+type Resource struct {
+	XMLName xml.Name `xml:"resource"`
+	Value string `xml:",chardata"`
+}
