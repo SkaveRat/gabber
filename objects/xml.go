@@ -86,6 +86,16 @@ type IqStanzaItemsQuery struct {
 	ItemsQuery ItemsQuery `xml:""`
 }
 
+
+type IqStanzaRosterQuery struct {
+	XMLName xml.Name `xml:"iq"`
+	Id string `xml:"id,attr"`
+	Type string  `xml:"type,attr"`
+	From string  `xml:"from,attr,omitempty"`
+	To string  `xml:"to,attr,omitempty"`
+	RosterQuery RosterQuery `xml:""`
+}
+
 type IqStanzaInfoQuery struct {
 	XMLName xml.Name `xml:"iq"`
 	Id string `xml:"id,attr"`
@@ -113,6 +123,11 @@ type IqStanzaSession struct {
 	Session Session  `xml:""`
 }
 
+type RosterItem struct {
+	XMLName xml.Name `xml:"item"`
+	Jid string `xml:"jid,attr"`
+}
+
 type ItemsQuery struct {
 	XMLName xml.Name `xml:"http://jabber.org/protocol/disco#items query"`
 }
@@ -121,6 +136,10 @@ type InfoQuery struct {
 	XMLName xml.Name `xml:"http://jabber.org/protocol/disco#info query"`
 }
 
+type RosterQuery struct {
+	XMLName xml.Name `xml:"jabber:iq:roster query"`
+	RosterItems []RosterItem
+}
 
 type Session struct {
 	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-session session"`

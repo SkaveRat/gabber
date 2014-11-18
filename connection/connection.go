@@ -53,6 +53,7 @@ func (this *Connection) Create(connChan chan net.Conn) {
 			session    := objects.Session{}
 			infoquery  := objects.InfoQuery{}
 			itemsquery := objects.ItemsQuery{}
+			rosterquery := objects.RosterQuery{}
 			var response []byte
 			if nil == xml.Unmarshal(stanza.InnerXml, &bind) {
 				response = getBindResponse(stanza.Id)
@@ -62,6 +63,8 @@ func (this *Connection) Create(connChan chan net.Conn) {
 				response = getInfoQueryResponse(stanza.Id)
 			}else if nil == xml.Unmarshal(stanza.InnerXml, &itemsquery) {
 				response = getItemsQueryResponse(stanza.Id)
+			}else if nil == xml.Unmarshal(stanza.InnerXml, &rosterquery) {
+				response = getRosterQueryResponse(stanza.Id)
 			}
 			answerChannel <- response
 		case _ = <-connCloseChannel:
@@ -132,6 +135,19 @@ func getInfoQueryResponse(id string) []byte {
 		Type: "result",
 		From: "localhost",
 		InfoQuery: objects.InfoQuery{},
+	}
+	iqBytes,_ := xml.Marshal(iq)
+	return iqBytes
+}
+
+func getRosterQueryResponse(id string) []byte {
+	roster := objects.RosterQuery{}
+	roster.RosterItems = append(roster.RosterItems, objects.RosterItem{Jid: "foobar@localhost"})
+	iq := objects.IqStanzaRosterQuery{
+		Id: id,
+		Type: "result",
+		To: "xabber@localhost/foobar",
+		RosterQuery: roster,
 	}
 	iqBytes,_ := xml.Marshal(iq)
 	return iqBytes
