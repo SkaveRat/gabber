@@ -28,6 +28,9 @@ type SaslSuccess struct {
 	XMLName   xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-sasl success"`
 }
 
+type SaslFailure struct {
+	XMLName   xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-sasl failure"`
+}
 
 type SaslMechanisms struct {
 	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-sasl mechanisms"`

@@ -23,7 +23,7 @@ func Run(connChan chan net.Conn) {
 func (this *Connection) Create(connChan chan net.Conn) {
 	this.conn = <-connChan;
 
-	authRequestChannel := make(chan bool)
+	authRequestChannel := make(chan objects.AuthCredentials)
 	streamStartChannel := make(chan bool)
 	connCloseChannel := make(chan bool)
 	iqChannel 		   := make(chan objects.IncomingStanza)
@@ -35,11 +35,15 @@ func (this *Connection) Create(connChan chan net.Conn) {
 	Mainloop:
 	for {
 		select {
-		case _ = <-authRequestChannel:
+		case request := <-authRequestChannel:
 			this.isAuthed = true
-			//TODO check credentials
-			success,_ := xml.Marshal(objects.SaslSuccess{})
-			answerChannel <- success
+			if(request.PasswordString() == "secretpassword") {
+				success,_ := xml.Marshal(objects.SaslSuccess{})
+				answerChannel <- success
+			}else{
+				success,_ := xml.Marshal(objects.SaslFailure{})
+				answerChannel <- success
+			}
 			answerChannel <- []byte("</stream:stream>")
 		case _ = <-streamStartChannel:
 			answerChannel <- getStreamBegin()
@@ -81,7 +85,7 @@ func (this *Connection) handleAnswerConnection(answerChan chan []byte) {
 	}
 }
 
-func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStreamChannel chan bool, iqChannel chan objects.IncomingStanza, connCloseChannel chan bool) {
+func (this *Connection) handleIncoming(authRequestChannel chan objects.AuthCredentials, incomingStreamChannel chan bool, iqChannel chan objects.IncomingStanza, connCloseChannel chan bool) {
 	connection := util.Tee{this.conn, os.Stdout}
 	decoder := xml.NewDecoder(connection);
 	decoder.Strict = false;
@@ -119,8 +123,9 @@ func (this *Connection) handleIncoming(authRequestChannel chan bool, incomingStr
 				switch stanza.XMLName.Local {
 				case "auth":
 					isWaitingForStream = true
-					authRequestChannel <- true
-					break Stanzaloop
+					authrequest := objects.AuthCredentials{stanza.InnerXml}
+					authRequestChannel <- authrequest
+					break Stanzaloop //TODO don't switch loops when not authed
 				case "iq":
 					iqChannel<-stanza
 				}
