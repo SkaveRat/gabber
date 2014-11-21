@@ -41,8 +41,8 @@ func (this *Connection) Create(connChan chan net.Conn) {
 				success,_ := xml.Marshal(objects.SaslSuccess{})
 				answerChannel <- success
 			}else{
-				success,_ := xml.Marshal(objects.SaslFailure{})
-				answerChannel <- success
+				fail,_ := xml.Marshal(objects.SaslFailure{})
+				answerChannel <- fail
 			}
 			answerChannel <- []byte("</stream:stream>")
 		case _ = <-streamStartChannel:
