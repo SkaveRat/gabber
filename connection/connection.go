@@ -1,6 +1,7 @@
 package connection
 
 import (
+	"code.google.com/p/go.crypto/pbkdf2"
 	"net"
 	"fmt"
 	"encoding/xml"
@@ -8,20 +9,25 @@ import (
 	"github.com/skaverat/gabber/objects"
 	"bytes"
 	"github.com/skaverat/gabber/util"
+	"crypto/sha1"
+	"database/sql"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type Connection struct {
 	conn net.Conn
+	db *sql.DB
 	isAuthed bool
 }
 
-func Run(connChan chan net.Conn) {
+func Run(connChan chan net.Conn, dbChan chan *sql.DB) {
 	c := Connection{isAuthed: false}
-	c.Create(connChan)
+	c.Create(connChan, dbChan)
 }
 
-func (this *Connection) Create(connChan chan net.Conn) {
-	this.conn = <-connChan;
+func (c *Connection) Create(connChan chan net.Conn, dbChan chan *sql.DB) {
+	c.conn = <-connChan;
+	c.db = <-dbChan
 
 	authRequestChannel := make(chan objects.AuthCredentials)
 	streamStartChannel := make(chan bool)
@@ -29,15 +35,15 @@ func (this *Connection) Create(connChan chan net.Conn) {
 	iqChannel 		   := make(chan objects.IncomingStanza)
 	answerChannel      := make(chan []byte)
 
-	go this.handleAnswerConnection(answerChannel); //outgoing stream
-	go this.handleIncoming(authRequestChannel, streamStartChannel, iqChannel, connCloseChannel); //incoming stream
+	go c.handleAnswerConnection(answerChannel); //outgoing stream
+	go c.handleIncoming(authRequestChannel, streamStartChannel, iqChannel, connCloseChannel); //incoming stream
 
 	Mainloop:
 	for {
 		select {
 		case request := <-authRequestChannel:
-			this.isAuthed = true
-			if(request.PasswordString() == "secretpassword") {
+			c.isAuthed = true
+			if(c.validLogin(request)) {
 				success,_ := xml.Marshal(objects.SaslSuccess{})
 				answerChannel <- success
 			}else{
@@ -47,7 +53,7 @@ func (this *Connection) Create(connChan chan net.Conn) {
 			answerChannel <- []byte("</stream:stream>")
 		case _ = <-streamStartChannel:
 			answerChannel <- getStreamBegin()
-			if(!this.isAuthed) {
+			if(!c.isAuthed) {
 				answerChannel <- getAuthRequest()
 			}else{
 				answerChannel <- getStreamFeatures()
@@ -76,7 +82,7 @@ func (this *Connection) Create(connChan chan net.Conn) {
 			break Mainloop
 		}
 	}
-	this.conn.Close()
+	c.conn.Close()
 }
 
 func (this *Connection) handleAnswerConnection(answerChan chan []byte) {
@@ -132,6 +138,23 @@ func (this *Connection) handleIncoming(authRequestChannel chan objects.AuthCrede
 			}
 		}
 	}
+}
+
+
+func (c *Connection) validLogin(details objects.AuthCredentials) bool {
+	var (
+		userpass []byte
+		usersalt []byte
+	)
+
+	tx,_ := c.db.Begin()
+	defer tx.Commit()
+
+	stmt := tx.QueryRow("SELECT password, salt FROM users WHERE username = ?", details.Username());
+	stmt.Scan(&userpass, &usersalt)
+
+	hash := pbkdf2.Key(details.Password(), usersalt, 65536, sha1.Size, sha1.New)
+	return fmt.Sprintf("%s", userpass) == fmt.Sprintf("%x", hash)
 }
 
 func getInfoQueryResponse(id string) []byte {
